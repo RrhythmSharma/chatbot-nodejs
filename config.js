@@ -4,4 +4,7 @@ module.exports = {
     API_AI_CLIENT_ACCESS_TOKEN: '946f0694a746413c9c60363e3951c769',
     FB_APP_SECRET: 'ff0365242d8c2285362460350a2125d8',
     SERVER_URL: " https://smartbot-api.herokuapp.com/",
+    SENDGRID_API_KEY: 'Your key'
+    EMAIL_TO:''
+    EMAIL_FROM:''
 };

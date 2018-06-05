@@ -10,7 +10,7 @@ const app = express();
 const uuid = require('uuid');
 
 
-// Messenger API parameters
+
 if (!config.FB_PAGE_TOKEN) {
 	throw new Error('missing FB_PAGE_TOKEN');
 }
@@ -23,28 +23,33 @@ if (!config.API_AI_CLIENT_ACCESS_TOKEN) {
 if (!config.FB_APP_SECRET) {
 	throw new Error('missing FB_APP_SECRET');
 }
-if (!config.SERVER_URL) { //used for ink to static files
+if (!config.SERVER_URL) {
 	throw new Error('missing SERVER_URL');
 }
-
+if (!config.SENDGRID_API_KEY) {
+	throw new Error('missing SENDGRID_API_KEY');
+}
+if (!config.EMAIL_TO) {
+	throw new Error('missing EMAIL_TO');
+}
+if (!config.EMAIL_FROM) {
+	throw new Error('missing EMAIL_FROM');
+}
 
 
 app.set('port', (process.env.PORT || 5000))
 
-//verify request came from facebook
 app.use(bodyParser.json({
 	verify: verifyRequestSignature
 }));
 
-//serve static files in the public directory
 app.use(express.static('public'));
 
-// Process application/x-www-form-urlencoded
 app.use(bodyParser.urlencoded({
 	extended: false
 }))
 
-// Process application/json
+
 app.use(bodyParser.json())
 
 
@@ -56,12 +61,12 @@ const apiAiService = apiai(config.API_AI_CLIENT_ACCESS_TOKEN, {
 });
 const sessionIds = new Map();
 
-// Index route
+
 app.get('/', function (req, res) {
 	res.send('Hello world, I am a chat bot')
 })
 
-// for Facebook verification
+
 app.get('/webhook/', function (req, res) {
 	console.log("request");
 	if (req.query['hub.mode'] === 'subscribe' && req.query['hub.verify_token'] === config.FB_VERIFY_TOKEN) {
@@ -72,28 +77,19 @@ app.get('/webhook/', function (req, res) {
 	}
 })
 
-/*
- * All callbacks for Messenger are POST-ed. They will be sent to the same
- * webhook. Be sure to subscribe your app to your page to receive callbacks
- * for your page.
- * https://developers.facebook.com/docs/messenger-platform/product-overview/setup#subscribe_app
- *
- */
+
 app.post('/webhook/', function (req, res) {
 	var data = req.body;
 	console.log(JSON.stringify(data));
 
 
 
-	// Make sure this is a page subscription
+
 	if (data.object == 'page') {
-		// Iterate over each entry
-		// There may be multiple if batched
 		data.entry.forEach(function (pageEntry) {
 			var pageID = pageEntry.id;
 			var timeOfEvent = pageEntry.time;
 
-			// Iterate over each messaging event
 			pageEntry.messaging.forEach(function (messagingEvent) {
 				if (messagingEvent.optin) {
 					receivedAuthentication(messagingEvent);
@@ -113,8 +109,6 @@ app.post('/webhook/', function (req, res) {
 			});
 		});
 
-		// Assume all went well.
-		// You must send back a 200, within 20 seconds
 		res.sendStatus(200);
 	}
 });
@@ -133,15 +127,12 @@ function receivedMessage(event) {
 	if (!sessionIds.has(senderID)) {
 		sessionIds.set(senderID, uuid.v1());
 	}
-	//console.log("Received message for user %d and page %d at %d with message:", senderID, recipientID, timeOfMessage);
-	//console.log(JSON.stringify(message));
 
 	var isEcho = message.is_echo;
 	var messageId = message.mid;
 	var appId = message.app_id;
 	var metadata = message.metadata;
 
-	// You may get a text or attachment but not both
 	var messageText = message.text;
 	var messageAttachments = message.attachments;
 	var quickReply = message.quick_reply;
@@ -156,7 +147,6 @@ function receivedMessage(event) {
 
 
 	if (messageText) {
-		//send message to api.ai
 		sendToApiAi(senderID, messageText);
 	} else if (messageAttachments) {
 		handleMessageAttachments(messageAttachments, senderID);
@@ -165,25 +155,41 @@ function receivedMessage(event) {
 
 
 function handleMessageAttachments(messageAttachments, senderID){
-	//for now just reply
 	sendTextMessage(senderID, "Attachment received. Thank you.");
 }
 
 function handleQuickReply(senderID, quickReply, messageId) {
 	var quickReplyPayload = quickReply.payload;
 	console.log("Quick reply for message %s with payload %s", messageId, quickReplyPayload);
-	//send payload to api.ai
 	sendToApiAi(senderID, quickReplyPayload);
 }
 
-//https://developers.facebook.com/docs/messenger-platform/webhook-reference/message-echo
 function handleEcho(messageId, appId, metadata) {
-	// Just logging message echoes to console
 	console.log("Received echo for message %s and app %d with metadata %s", messageId, appId, metadata);
 }
 
 function handleApiAiAction(sender, action, responseText, contexts, parameters) {
 	switch (action) {
+		case "detailed-application":
+		if(isDefined(contexts[0]) && contexts[0].name == 'job-application' && contexts[0].parameters){
+			let phone_number = (isDefined(contexts[0].parameters['phone_number']) && contexts[0].parameters['phone_number']!='') ? contexts[0].parameters['phone_number'] : '';
+			let user_name = (isDefined(contexts[0].parameters['user_name']) && contexts[0].parameters['user_name']!='') ? contexts[0].parameters['user_name'] : '';
+			let previous_job = (isDefined(contexts[0].parameters['previous_job']) && contexts[0].parameters['previous_job']!='') ? contexts[0].parameters['previous_job'] : '';
+			let year_of_exp = (isDefined(contexts[0].parameters['year_of_exp']) && contexts[0].parameters['year_of_exp']!='') ? contexts[0].parameters['year_of_exp'] : '';
+			let job_vacancy = (isDefined(contexts[0].parameters['job_vacancy']) && contexts[0].parameters['job_vacancy']!='') ? contexts[0].parameters['job_vacancy'] : '';
+
+			if(phone_number!='' && user_name!='' && previous_job!='' && year_of_exp!= '' && job_vacancy!='' ){
+				let emailContent = 'A new job enquiry from' + user_name + 'for the job: ' + job_vacancy +
+				'<br> previous job position: ' + previous_job + '.' +
+				'<br> Years of experience: ' + year_of_exp + '.' +
+				'<br> phone_number: ' + phone_number + '.' +
+
+				sendEmail('New job application', emailContent);
+			}
+
+		}
+		sendTextMessage(sender,responseText);
+		break;
 		case "job-enquiry":
 		:[
       {
@@ -205,17 +211,16 @@ function handleApiAiAction(sender, action, responseText, contexts, parameters) {
 		sendQuickReply(sender,responseText);
 		break;
 		default:
-			//unhandled action, just send back the text
 			sendTextMessage(sender, responseText);
 	}
 }
 
 function handleMessage(message, sender) {
 	switch (message.type) {
-		case 0: //text
+		case 0:
 			sendTextMessage(sender, message.speech);
 			break;
-		case 2: //quick replies
+		case 2:
 			let replies = [];
 			for (var b = 0; b < message.replies.length; b++) {
 				let reply =
@@ -228,11 +233,10 @@ function handleMessage(message, sender) {
 			}
 			sendQuickReply(sender, message.title, replies);
 			break;
-		case 3: //image
+		case 3:
 			sendImageMessage(sender, message.imageUrl);
 			break;
 		case 4:
-			// custom payload
 			var messageData = {
 				recipient: {
 					id: sender
@@ -376,10 +380,6 @@ function sendTextMessage(recipientId, text) {
 	callSendAPI(messageData);
 }
 
-/*
- * Send an image using the Send API.
- *
- */
 function sendImageMessage(recipientId, imageUrl) {
 	var messageData = {
 		recipient: {
@@ -398,10 +398,6 @@ function sendImageMessage(recipientId, imageUrl) {
 	callSendAPI(messageData);
 }
 
-/*
- * Send a Gif using the Send API.
- *
- */
 function sendGifMessage(recipientId) {
 	var messageData = {
 		recipient: {
@@ -420,10 +416,6 @@ function sendGifMessage(recipientId) {
 	callSendAPI(messageData);
 }
 
-/*
- * Send audio using the Send API.
- *
- */
 function sendAudioMessage(recipientId) {
 	var messageData = {
 		recipient: {
@@ -442,10 +434,6 @@ function sendAudioMessage(recipientId) {
 	callSendAPI(messageData);
 }
 
-/*
- * Send a video using the Send API.
- * example videoName: "/assets/allofus480.mov"
- */
 function sendVideoMessage(recipientId, videoName) {
 	var messageData = {
 		recipient: {
@@ -464,10 +452,6 @@ function sendVideoMessage(recipientId, videoName) {
 	callSendAPI(messageData);
 }
 
-/*
- * Send a video using the Send API.
- * example fileName: fileName"/assets/test.txt"
- */
 function sendFileMessage(recipientId, fileName) {
 	var messageData = {
 		recipient: {
@@ -488,10 +472,6 @@ function sendFileMessage(recipientId, fileName) {
 
 
 
-/*
- * Send a button message using the Send API.
- *
- */
 function sendButtonMessage(recipientId, text, buttons) {
 	var messageData = {
 		recipient: {
@@ -535,7 +515,6 @@ function sendGenericMessage(recipientId, elements) {
 
 function sendReceiptMessage(recipientId, recipient_name, currency, payment_method,
 							timestamp, elements, address, summary, adjustments) {
-	// Generate a random receipt ID as the API requires a unique ID
 	var receiptId = "order" + Math.floor(Math.random() * 1000);
 
 	var messageData = {
@@ -564,10 +543,6 @@ function sendReceiptMessage(recipientId, recipient_name, currency, payment_metho
 	callSendAPI(messageData);
 }
 
-/*
- * Send a message with Quick Reply buttons.
- *
- */
 function sendQuickReply(recipientId, text, replies, metadata) {
 	var messageData = {
 		recipient: {
@@ -583,10 +558,6 @@ function sendQuickReply(recipientId, text, replies, metadata) {
 	callSendAPI(messageData);
 }
 
-/*
- * Send a read receipt to indicate the message has been read
- *
- */
 function sendReadReceipt(recipientId) {
 
 	var messageData = {
@@ -599,10 +570,6 @@ function sendReadReceipt(recipientId) {
 	callSendAPI(messageData);
 }
 
-/*
- * Turn typing indicator on
- *
- */
 function sendTypingOn(recipientId) {
 
 
@@ -616,10 +583,6 @@ function sendTypingOn(recipientId) {
 	callSendAPI(messageData);
 }
 
-/*
- * Turn typing indicator off
- *
- */
 function sendTypingOff(recipientId) {
 
 
@@ -633,10 +596,6 @@ function sendTypingOff(recipientId) {
 	callSendAPI(messageData);
 }
 
-/*
- * Send a message with the account linking call-to-action
- *
- */
 function sendAccountLinking(recipientId) {
 	var messageData = {
 		recipient: {
@@ -662,7 +621,6 @@ function sendAccountLinking(recipientId) {
 
 
 function greetUserText(userId) {
-	//first read user firstname
 	request({
 		uri: 'https://graph.facebook.com/v2.7/' + userId,
 		qs: {
@@ -690,11 +648,6 @@ function greetUserText(userId) {
 	});
 }
 
-/*
- * Call the Send API. The message data goes in the body. If successful, we'll
- * get the message id in a response
- *
- */
 function callSendAPI(messageData) {
 	request({
 		uri: 'https://graph.facebook.com/v2.6/me/messages',
@@ -724,25 +677,15 @@ function callSendAPI(messageData) {
 
 
 
-/*
- * Postback Event
- *
- * This event is called when a postback is tapped on a Structured Message.
- * https://developers.facebook.com/docs/messenger-platform/webhook-reference/postback-received
- *
- */
 function receivedPostback(event) {
 	var senderID = event.sender.id;
 	var recipientID = event.recipient.id;
 	var timeOfPostback = event.timestamp;
 
-	// The 'payload' param is a developer-defined field which is set in a postback
-	// button for Structured Messages.
 	var payload = event.postback.payload;
 
 	switch (payload) {
 		default:
-			//unindentified payload
 			sendTextMessage(senderID, "I'm not sure what you want. Can you be more specific?");
 			break;
 
@@ -754,18 +697,10 @@ function receivedPostback(event) {
 }
 
 
-/*
- * Message Read Event
- *
- * This event is called when a previously-sent message has been read.
- * https://developers.facebook.com/docs/messenger-platform/webhook-reference/message-read
- *
- */
 function receivedMessageRead(event) {
 	var senderID = event.sender.id;
 	var recipientID = event.recipient.id;
 
-	// All messages before watermark (a timestamp) or sequence have been seen.
 	var watermark = event.read.watermark;
 	var sequenceNumber = event.read.seq;
 
@@ -773,14 +708,6 @@ function receivedMessageRead(event) {
 		"number %d", watermark, sequenceNumber);
 }
 
-/*
- * Account Link Event
- *
- * This event is called when the Link Account or UnLink Account action has been
- * tapped.
- * https://developers.facebook.com/docs/messenger-platform/webhook-reference/account-linking
- *
- */
 function receivedAccountLink(event) {
 	var senderID = event.sender.id;
 	var recipientID = event.recipient.id;
@@ -792,13 +719,6 @@ function receivedAccountLink(event) {
 		"and auth code %s ", senderID, status, authCode);
 }
 
-/*
- * Delivery Confirmation Event
- *
- * This event is sent to confirm the delivery of a message. Read more about
- * these fields at https://developers.facebook.com/docs/messenger-platform/webhook-reference/message-delivered
- *
- */
 function receivedDeliveryConfirmation(event) {
 	var senderID = event.sender.id;
 	var recipientID = event.recipient.id;
@@ -817,43 +737,20 @@ function receivedDeliveryConfirmation(event) {
 	console.log("All message before %d were delivered.", watermark);
 }
 
-/*
- * Authorization Event
- *
- * The value for 'optin.ref' is defined in the entry point. For the "Send to
- * Messenger" plugin, it is the 'data-ref' field. Read more at
- * https://developers.facebook.com/docs/messenger-platform/webhook-reference/authentication
- *
- */
 function receivedAuthentication(event) {
 	var senderID = event.sender.id;
 	var recipientID = event.recipient.id;
 	var timeOfAuth = event.timestamp;
 
-	// The 'ref' field is set in the 'Send to Messenger' plugin, in the 'data-ref'
-	// The developer can set this to an arbitrary value to associate the
-	// authentication callback with the 'Send to Messenger' click event. This is
-	// a way to do account linking when the user clicks the 'Send to Messenger'
-	// plugin.
 	var passThroughParam = event.optin.ref;
 
 	console.log("Received authentication for user %d and page %d with pass " +
 		"through param '%s' at %d", senderID, recipientID, passThroughParam,
 		timeOfAuth);
 
-	// When an authentication is received, we'll send a message back to the sender
-	// to let them know it was successful.
 	sendTextMessage(senderID, "Authentication successful");
 }
 
-/*
- * Verify that the callback came from Facebook. Using the App Secret from
- * the App Dashboard, we can verify the signature that is sent with each
- * callback in the x-hub-signature field, located in the header.
- *
- * https://developers.facebook.com/docs/graph-api/webhooks#setup
- *
- */
 function verifyRequestSignature(req, res, buf) {
 	var signature = req.headers["x-hub-signature"];
 
@@ -874,6 +771,27 @@ function verifyRequestSignature(req, res, buf) {
 	}
 }
 
+function sendEmail(subject, content){
+	var helper = require('sendgrid').mail;
+	var from_email = new helper.Email(config.EMAIL_FROM);
+	var to_email = new helper.Email(config.EMAIL_TO);
+	var subject = "subject";
+	var content = new helper.Mail(from_email, subject, to_email, content)
+
+	var sg = require('Sendgrid')(config.SENDGRID_API_KEY);
+	var request = sg.emptyRequest({
+		method: 'POST',
+		path: '/v3/mail/send',
+		body: mail.toJSON()
+	});
+
+	sg.API(request, function(error, response){
+		console.log(response.statusCode);
+		console.log(response.body);
+		console.log(response.headers);
+	})
+}
+
 function isDefined(obj) {
 	if (typeof obj == 'undefined') {
 		return false;
@@ -886,7 +804,6 @@ function isDefined(obj) {
 	return obj != null;
 }
 
-// Spin up the server
 app.listen(app.get('port'), function () {
 	console.log('running on port', app.get('port'))
 })
