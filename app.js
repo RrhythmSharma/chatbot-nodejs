@@ -35,7 +35,9 @@ if (!config.EMAIL_TO) {
 if (!config.EMAIL_FROM) {
 	throw new Error('missing EMAIL_FROM');
 }
-
+if (!config.  WEATHER_API_KEY) {
+	throw new Error('missing   WEATHER_API_KEY');
+}
 
 app.set('port', (process.env.PORT || 5000))
 
@@ -170,6 +172,27 @@ function handleEcho(messageId, appId, metadata) {
 
 function handleApiAiAction(sender, action, responseText, contexts, parameters) {
 	switch (action) {
+		case "get-current-weather":
+		if(parameters.hasOwnproperty("geo-city") && parameters["geo-city"]!=''){
+			var request = require('request');
+
+			request({
+				url: 'http://api.openweathermap.org/data/2.5/weather',
+				qs: {
+          applied: config.WEATHER_API_KEY,
+					q: parameters["geo-city"]
+				}
+			}, function(error, response, body){
+				if(!error && response.statusCode== 200){
+					let weather = JSON.
+				}else{
+					console.error(response.error);
+				}
+		});
+		}else {
+			sendTextMessage(sender, responseText);
+		}
+		break;
 		case "detailed-application":
 		if(isDefined(contexts[0]) && contexts[0].name == 'job-application' && contexts[0].parameters){
 			let phone_number = (isDefined(contexts[0].parameters['phone_number']) && contexts[0].parameters['phone_number']!='') ? contexts[0].parameters['phone_number'] : '';
