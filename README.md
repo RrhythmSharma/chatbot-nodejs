@@ -5,9 +5,6 @@ Firstly chatbot ask user to enter information about job then,
 that information is saved in database (provided by "Heroku") afterwards 
 the information send through ("sendgrid" an add-on provided by "Heroku") email to recuiter
 
-# Live chating with bot implemented on "SLACK":
-https://photos.app.goo.gl/zzDSngZntnEtro3o9
-
 # Mail Photo 
 
 ![alt text](https://github.com/rrhythmsharma/RecruiterBot-nodejs/blob/master/Screenshot_20180604_203954.png)
