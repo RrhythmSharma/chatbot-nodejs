@@ -1,5 +1,5 @@
 # chatbot nodejs :
-i develope a chat bot project that helps recruiter to find out perfect employee.
+chat bot that helps recruiter to find out perfect employee.
 # Machanism
 Firstly chatbot ask user to enter information about job then,
 that information is saved in database (provided by "Heroku") afterwards 
