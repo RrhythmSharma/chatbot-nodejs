@@ -1,9 +1,11 @@
 # chatbot nodejs :
 chat bot that helps recruiter to find out perfect employee.
 # Machanism
-Firstly chatbot ask user to enter information about job then,
-that information is saved in database (provided by "Heroku") afterwards 
-the information send through ("sendgrid" an add-on provided by "Heroku") email to recuiter
+* Chat-bot ask detalis form user
+* User fills the details as asked by chatbot
+* Details are stored in the database.
+* The details are then recieves by recuiter(*sendgrid)
+*sendgrid = it is an add-on provided by Heroku for sending email.
 
 # Mail Photo 
 
